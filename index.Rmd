@@ -3,6 +3,8 @@ title: "Trabalho de Conclusão de Curso - UFPR"
 author: Felipe Barletta
 ---
 
-# Generalized Additive Models
+# Felipe Barletta 
+
+## PBE-UEM
 
 
