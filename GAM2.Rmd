@@ -1,0 +1,325 @@
+---
+title: "Distribuição espacial do risco para mortalidade infantil em Curitiba-PR (2004)"
+---
+
+```{r,setup, include=FALSE}
+knitr::opts_chunk$set(comment = NULL,
+               message = FALSE)
+library(knitrBootstrap)
+```
+
+# Modelos GAM (Generalized Additive Models)
+
+- *LM - Linear Model*
+
+$$Y_i = \mu_i+\epsilon_i$$ 
+
+em que, $\mu_i = X_i\beta$ e $\mu_i = E(Y_i)$
+ 
+
+
+- *GLM - Generalized Linear Model*  
+
+$$
+g(\mu_i) = X_i\beta
+$$
+
+em que , $g$ é uma função de ligação
+
+- *GAM - Generalized Additive Model*
+
+    $$
+    g(\mu_i) = X_i\beta+f_1(x_{1i})+f_2(x_{2i})+f_3(x_{3i},x_{41})+...
+    $$  
+    
+Para os modelos *GLM* e *GAM*, $Y_i \sim$ alguma distribuição da familia exponencial 
+    
+## Regressão via *Splines*
+
+- Método para aproximar funções(Interpolação)
+
+$$
+y_i = S(x_i)+\epsilon_i
+$$
+
+
+- Função por partes (partição do intervalo[a,b])
+
+$$
+S(x) = \sum b_j(x)\beta_j
+$$
+
+em que $b_j(x)$ é a j-ésima base da função.
+
+## Exemplo Regressão via Splines
+
+```{r}
+size <- c(1.42,1.58,1.78,1.99,1.99,1.99,2.13,2.13,2.13,2.32,
+	2.32,2.32,2.32,2.32,2.43,2.43,2.78,2.98,2.98)
+wear <- c(4,4.2,2.5,2.6,2.8,2.4,3.2,2.4,2.6,4.8,2.9,3.8,3,
+     	2.7,3.1,3.3,3,2.8,1.7)
+x <- size-min(size);x <- x/max(x)
+plot(x,wear,xlab='Scaled engine size',ylab='Wear index')
+rk <- function(x,z) ## R(x,z) for cubic spline on [0,1]
+   { ((z-0.5^2)-1/12)*((x-0.5^2)-1/12)/4-
+      	((abs(x-z)-0.5)^4-(abs(x-z)-0.5)^2/2+7/240)/24
+	}
+
+spl.X <- function(x,xk) 
+## set up model matrix for cubic penalized regression spline
+{      q <- length(xk) + 2 # number of parameters
+       n <- length(x)      # number of data
+       X <- matrix(1,n,q)  # initialized model matrix
+       X[,2] <- x	   # set second column to x
+       X[,3:q] <- outer(x,xk, FUN=rk)
+       X
+}
+
+xk <- 1:4/5		# choose some knots
+X <- spl.X(x,xk)	# generated model matrix
+mod.1 <- lm(wear~X-1)	# fit model
+xp <- 0:100/100		# x values for prediction
+Xp <- spl.X(xp,xk)	# prediction matrix
+lines(xp,Xp%*%coef(mod.1),col='red')
+```
+
+## *Smoothing Splines*
+
+- Escolha do melhor parâmetro de suavização
+
+   A idéia é: tirar sucessivamente elementos da amostra e fazer uma estimativa do ponto retirado.
+
+   Objetivo é: minimizar o erro de predição.
+
+    - Generalized Cross Validation (GCV)
+      Usado quando a escala do parâmetro não é conhecida
+
+    - Un-Biased Risk Estimator (UBRE)
+      Usado quando a escala do parâmetro é conhecida    
+
+## Dados 
+
+- Origem dos dados: SIM(Sistema sobre mortalidade) e SINASC(Sistema de informação sobre nascidos vivos)
+- Cedidos pela Secretaria municipal de saúde de Curitiba-PR
+- Georreferenciamento foi realizado pelo SIG do IPPUC de Curitiba-PR
+- Considerados todos os óbitos com até 12 meses incompletos em 2004
+- Amostra final consistiu em um caso para cada dois controles
+- Dois grupos
+     - Mortalidade neonatal(óbitos com menos de 28 dias)
+    - Mortalidade pósnatal(óbitos entre 28 a 12 meses incompletos)
+
+- Variáveis consideradas:
+    - Variável resposta, 1(óbito) e 0(caso contrário);
+   - Coordenada de localização espacial da residência(latitude e longitude);
+   - Variáveis sócio-demográficas:
+     - Peso ao nascer e gênero da criança;
+     - Tipo de parto;
+     - Tempo de gestação;
+     - Escolaridade e idade da mãe;
+     - Quantidade de filhos mortos;
+     - Quantidade de filhos vivos.
+
+
+
+## Recursos Computacionais
+ - [R - https://www.r-project.org/](https://www.r-project.org/)
+
+   Pacote usado neste estudo
+
+    - mgcv::gam()
+
+   Pacotes para ajustar modelos *GAM*
+
+    - gam::gam()
+
+    - tsDyn::aar()
+
+    - gamlss::gamlss()
+[gamlss](http://www.gamlss.org/)
+
+
+## Resultados
+
+```{r,results='hide'}
+### Carregando pacotes necessários
+sapply(c("sp", "maptools", "spdep", "mgcv", "rgdal"), require, char=T)
+
+##### lendo o mapa do estado do PARANÁ
+cwb<-readOGR("div_municipal.shp",layer="div_municipal")
+######## Carregando dados de mortalidade neonatal
+neo <- read.table('neo_contr1.txt',h=T)
+head(neo)
+names(neo)
+neo$Y <- as.factor(neo$Y)
+neo$ESCMAE <- as.factor(neo$ESCMAE)
+neo$ESTCIVMAE <- as.factor(neo$ESTCIVMAE)
+neo$GESTACAO <- as.factor(neo$GESTACAO)
+neo$GRAVIDEZ <- as.factor(neo$GRAVIDEZ)
+neo$PARTO <- as.factor(neo$PARTO)
+neo$RACACOR <- as.factor(neo$RACACOR)
+levels(neo$GESTACAO) <- c('0','0','0','0','1','0')
+summary(neo$GESTACAO)
+prop.table(table(neo$Y))
+
+######## Carregando dados de mortalidade pos
+pos <- read.table('pos_contr2.txt',h=T)
+pos$Y <- as.factor(pos$Y)
+pos$ESCMAE <- as.factor(pos$ESCMAE)
+pos$ESTCIVMAE <- as.factor(pos$ESTCIVMAE)
+pos$GESTACAO <- as.factor(pos$GESTACAO)
+pos$GRAVIDEZ <- as.factor(pos$GRAVIDEZ)
+pos$PARTO <- as.factor(pos$PARTO)
+pos$RACACOR <- as.factor(pos$RACACOR)
+levels(pos$GESTACAO) <- c('0','0','0','1','0')
+
+```
+```{r,fig.width = 7,fig.height = 7}
+### Plotando o mapa de Curitiba
+par(mfrow=c(1,2))
+plot(cwb,main='Componente Neonatal')
+## Inserindo os controles
+points(neo$XCOORD[neo$Y==0],neo$YCOORD[neo$Y==0],col='darkgreen',cex = .4, pch=19)
+### Inserindo os caso
+points(neo$XCOORD[neo$Y==1],neo$YCOORD[neo$Y==1],col='red',cex = 0.4, pch=19)
+
+legend(662025,7163520, legend = c('Não óbitos','Óbitos'), col = c('darkgreen','red'), pch = 19,
+              lty = 1,bty='n',text.col=c('darkgreen','red'))
+
+
+plot(cwb,main='Componente Pósnatal')
+#bbox(cwb)
+## Inserindo os controles
+points(pos$XCOORD[neo$Y==0],pos$YCOORD[neo$Y==0],col='darkgreen',cex = .4, pch=19)
+### Inserindo os caso
+points(neo$XCOORD[pos$Y==1],neo$YCOORD[pos$Y==1],col='red',cex = 0.4, pch=19)
+
+legend(662025,7163520, legend = c('Não óbitos','Óbitos'), col = c('darkgreen','red'), pch = 19,
+              lty = 1,bty='n',text.col=c('darkgreen','red'))
+
+```
+
+Componente Neonatal
+```{r}
+model.neo <- gam(neo$Y ~ neo$PESO+neo$GESTACAO+neo$IDADEMAE+neo$QTDFILVIVO+neo$PARTO+s(XCOORD,YCOORD, k=10, bs="tp"),family=binomial,data=neo) 
+summary(model.neo)
+```
+
+## Resultados
+Componente Posnatal
+```{r}
+model.pos<-gam(pos$Y ~ pos$IDADEMAE+pos$PESO+pos$QTDFILVIVO+s(pos$XCOORD,pos$YCOORD, k=10,bs='tp'), family=binomial,dat=pos) 
+summary(model.pos)
+```
+
+## Resultados
+```{r,fig.width = 10,fig.height = 9}
+
+###### Ajustando modelo GAM 
+models <- gam(neo$Y ~ +s(XCOORD,YCOORD, k=10, bs="tp"),family=binomial,data=neo) 
+
+
+## Fazendo a grid 
+xLim <- range(pretty(bbox(cwb)[1,])) ### Adicionado
+yLim <- range(pretty(bbox(cwb)[2,])) ### Adicionado
+gx <- seq(xLim[1],  xLim[2], 500); nx <- length(gx) ### Modificado
+gy <- seq(yLim[1],  yLim[2], 500); ny <- length(gy) ### Modificado
+gr <- expand.grid(gx, gy) 
+XCOORD <- gr$Var1 
+YCOORD <- gr$Var2 
+
+### criando data frame para predição 
+ndados <- data.frame(XCOORD, YCOORD)
+pred   <- predict(models,ndados,type="response",se.fit=TRUE) 
+pred   <- data.frame(pred) 
+
+### Adicionado ###############################################################
+### Criando uma Máscara - pontos da grade vs. polígono do município
+gr.sp   <- gr; coordinates(gr.sp) <- ~Var1+Var2
+cwb.pol <- SpatialPolygons(list(Polygons(list(Polygon(cwb@lines[[1]]@Lines[[1]]@coords)), "CWB")))
+mask    <- over(gr.sp, cwb.pol)
+
+### Usando a máscara
+masked <- matrix(pred$fit, nrow=nx, ncol=ny)* matrix(mask, nrow=nx, ncol=ny)
+
+par(mfrow=c(1,2))
+contour(gx, gy, masked, asp=T, col=3, ### Modificado
+        main="Componente Neonatal", 
+        xlab="", ylab="" ,axes=F)
+plot(cwb, add=T,axes=F) 
+
+###### Ajustando modelo GAM Componente POSNATAL 
+models2 <- gam(pos$Y ~ +s(XCOORD,YCOORD, k=10, bs="tp"),family=binomial,data=pos) 
+
+
+## Fazendo a grid 
+xLim <- range(pretty(bbox(cwb)[1,])) ### Adicionado
+yLim <- range(pretty(bbox(cwb)[2,])) ### Adicionado
+gx <- seq(xLim[1],  xLim[2], 500); nx <- length(gx) ### Modificado
+gy <- seq(yLim[1],  yLim[2], 500); ny <- length(gy) ### Modificado
+gr <- expand.grid(gx, gy) 
+XCOORD <- gr$Var1 
+YCOORD <- gr$Var2 
+
+### criando data frame para predição 
+ndados2 <- data.frame(XCOORD, YCOORD) 
+pred2   <- predict(models2,ndados,type="response",se.fit=TRUE) 
+pred2   <- data.frame(pred2) 
+
+### Adicionado ###############################################################
+### Criando uma Máscara - pontos da grade vs. polígono do município
+gr.sp   <- gr; coordinates(gr.sp) <- ~Var1+Var2
+cwb.pol <- SpatialPolygons(list(Polygons(list(Polygon(cwb@lines[[1]]@Lines[[1]]@coords)), "CWB")))
+mask    <- over(gr.sp, cwb.pol)
+
+### Usando a máscara
+masked2 <- matrix(pred2$fit, nrow=nx, ncol=ny)* matrix(mask, nrow=nx, ncol=ny)
+
+
+contour(gx, gy, masked2, asp=T, col=3, ### Modificado
+        main="Componente Posnatal", 
+        xlab="", ylab="" ,axes=F)
+plot(cwb, add=T,axes=F) 
+
+```
+
+## Considerações Finais
+
+- Grande influência para  ambas  componentes da mortalidade infantil;
+    - Peso as nascer
+    - Idade da mãe
+    - Quantidade de filhos vivos
+
+- Influência apenas para a componente Neonatal;
+    - Tempo gestacional
+    - Tipo de parto
+    - Mortalidade neonatal está mais associada a fatores de ordem congênita e complicações no parto.
+
+- Escolaridade da mãe não é fator de risco;
+
+- A variação espacial do risco evidenciou-se  constante  ao  longo  do  espaço      
+
+## *To do List*
+
+- Ajuste com outras bases de suavização
+
+- Expandir estudo aos *Generalized Additive Mixed Models (GAMMs)* 
+
+- Ajuste com o pacote `gamlss`
+
+- Testar gráficos dinâmicos com dados de vários anos
+
+    - [shiny package](https://cran.r-project.org/web/packages/shiny/index.html)
+
+## Referências
+
+ - [WOOD, S. N., Generalized Additive Models: Introduction with R](http://reseau-mexico.fr/sites/reseau-mexico.fr/files/igam.pdf)
+
+ - [T.J. Hastie, R.J. Tibshirani, Generalized Additive Models](https://www.crcpress.com/Generalized-Additive-Models/Hastie-Tibshirani/9780412343902)
+        
+ - [Análise espacial da mortalidade infantil em Porto Alegre-RS](http://www.leg.ufpr.br/lib/exe/fetch.php/projetos:artigo_silvia-rs.pdf)
+
+ - [Kelsall & Diggle (1998)](http://www.leg.ufpr.br/lib/exe/fetch.php/projetos:mortalidade:bibliografia:1467-9876.pdf)
+
+ - [Kelsall & Diggle (2002)](http://www.leg.ufpr.br/lib/exe/fetch.php/projetos:mortalidade:bibliografia:1467-9876_2e00274.pdf)
+
+ - [mgcv packages](https://cran.r-project.org/web/packages/mgcv/mgcv.pdf)

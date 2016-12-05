@@ -1,0 +1,17 @@
+name: "GAM"
+output_dir: "."
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    theme: journal
+navbar:
+  title: "GAM"
+  left:
+    - text: "Home"
+      href: index.html
+    - text: "Análise"
+      href: GAM2.html
+    - text: "Dados"
+      href: dados.html

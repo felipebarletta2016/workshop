@@ -1,0 +1,7 @@
+---
+title: "GAM"
+---
+
+# Generalized Additive Models
+
+
